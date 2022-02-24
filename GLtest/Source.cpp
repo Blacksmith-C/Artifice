@@ -1,3 +1,7 @@
+  /////////////////////////
+ // LIBRARY INCLUSIONS ///
+/////////////////////////
+
 #include <iostream> //For debug
 #include <map> //Map map
 #include <string> //Silly string
@@ -11,6 +15,15 @@
 #include <ft2build.h> //Rendering text
 #include FT_FREETYPE_H  //Basic FreeType functionality
 
+#define STB_IMAGE_IMPLEMENTATION //Required by image reader to initialize correctly
+#include <stb_image.h> //Load image reader for accessing textures
+
+
+
+  /////////////
+ // MACROS ///
+/////////////
+
 #ifndef RELEASE //Define RELEASE to compile as a release build
 #define DEBUG std::cout //DEBUG(x) Sends messages to debug stream (terminal)
 #define ERROR std::cerr //ERROR(x) Sends messages to error stream (terminal)
@@ -20,18 +33,34 @@ const char* Header = "    			%%#%%%%%%%%%%%%%%%+:::::\n			:===%%%%%%%%%%%%%%%%%%
 #define ERROR(X)
 #endif
 
-//#define STB_IMAGE_IMPLEMENTATION //Required by image reader to initialize correctly
-//#include <C:\Artifice\GLtest\stb_image.h> //Load image reader for accessing textures
 
 
+  ///////////////////
+ // DECLARE TYPES //
+///////////////////
+
+struct Character {
+	unsigned int ID; //ID number of glyph texture
+	glm::ivec2 Size; //Width, height of glyph
+	glm::ivec2 Bearing; //Offsets from baseline to left/top of glyph
+	unsigned int Advance; //Horizontal distance to start of next glyph
+};
+std::map<char, Character> Characters; //Will hold a character for each possible char value- ergo, each ASCII character
+
+
+
+  //////////////////////////
+ // INITIALIZE VARIABLES //
+//////////////////////////
 
 const unsigned int xResolution = 1920; //Set window width
 const unsigned int yResolution = 1080; //Set window height
+
 unsigned int VAO, VBO; //Initialize VAO, VBO
 
-const char *fontname = "fonts/CourierNew.ttf";
+const char *fontname = "C:/Artifice/x64/Debug/fonts/CourierNew.ttf";
 
-const char *vertexShaderSource = "#version 460 core\n"
+const char *TextVSSource = "#version 460 core\n"
 "layout (location = 0) in vec4 vertex;\n"
 "out vec2 TexCoords;\n"
 "uniform mat4 projection;\n"
@@ -41,7 +70,7 @@ const char *vertexShaderSource = "#version 460 core\n"
 "   TexCoords = vertex.zw;\n"
 "}\0";
 
-const char *fragmentShaderSource = "#version 460 core\n"
+const char *TextFSSource = "#version 460 core\n"
 "in vec2 TexCoords;\n"
 "out vec4 color;\n"
 "uniform sampler2D text;\n"
@@ -52,17 +81,205 @@ const char *fragmentShaderSource = "#version 460 core\n"
 "   color = vec4(textColor, 1.0) * sampled;\n"
 "}\n\0";
 
+const char *CameraVSSource = "#version 460 core\n"
+"layout (location = 0) in vec3 aPos;\n"
+"layout (location = 1) in vec2 aTexCoord;\n"
+"out vec2 TexCoords;\n"
+"uniform mat4 model;\n"
+"uniform mat4 view;\n"
+"uniform mat4 projection;\n"
+"void main()\n"
+"{\n"
+"   gl_Position = projection * view * model * vec4(aPos, 1.0f);\n"
+"   TexCoords = vec2(aTexCoord.x, aTexCoord.y);\n"
+"}\0";
 
-struct Character {
-	unsigned int ID; //ID number of glyph texture
-	glm::ivec2 Size; //Width, height of glyph
-	glm::ivec2 Bearing; //Offsets from baseline to left/top of glyph
-	unsigned int Advance; //Horizontal distance to start of next glyph
+const char *CameraFSSource = "#version 460 core\n"
+"in vec2 TexCoords;\n"
+"out vec4 FragColor;\n"
+"uniform sampler2D texture;\n"
+"void main()\n"
+"{\n"
+"   FragColor = texture(texture, TexCoords);\n"
+"}\n\0";
+
+
+
+float cube[] = {
+		//BOTTOM FACE
+	     0.5f,  0.5f, -0.5f,  1.0f, 1.0f, //5
+		-0.5f,  0.5f, -0.5f,  2.0f/3.0f, 1.0f, //6
+		-0.5f, -0.5f, -0.5f,  2.0f/3.0f, 0.0f, //7
+	
+	    -0.5f, -0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //7
+		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f, //8
+		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f, //5 
+
+		//TOP FACE
+		 0.5f,  0.5f,  0.5f,  1.0f/3.0f, 1.0f, //1
+		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, //2
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, //3
+		
+		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, //3
+		 0.5f, -0.5f,  0.5f,  1.0f/3.0f, 0.0f, //4
+		 0.5f,  0.5f,  0.5f,  1.0f/3.0f, 1.0f, //1
+
+		//WEST FACE
+		-0.5f,  0.5f, -0.5f,  1.0f/3.0f, 0.0f, //6
+		-0.5f,  0.5f,  0.5f,  1.0f/3.0f, 1.0f, //2
+		-0.5f, -0.5f,  0.5f,  2.0f/3.0f, 1.0f, //3
+
+		-0.5f, -0.5f,  0.5f,  2.0f/3.0f, 1.0f, //3
+		-0.5f, -0.5f, -0.5f,  2.0f/3.0f, 0.0f, //7
+		-0.5f,  0.5f, -0.5f,  1.0f/3.0f, 0.0f, //6
+
+		//EAST FACE
+		 0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //1
+		 0.5f,  0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //5
+		 0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //8
+
+		 0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //8
+		 0.5f, -0.5f,  0.5f,  1.0f / 3.0f, 1.0f, //4
+		 0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //1
+
+		 //SOUTH FACE
+		-0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //7
+		 0.5f, -0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //8
+		 0.5f, -0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //4
+
+		 0.5f, -0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //4
+		-0.5f, -0.5f,  0.5f,  1.0f / 3.0f, 1.0f, //3
+		-0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //7
+
+		//NORTH FACE
+		 0.5f,  0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //5
+		-0.5f,  0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //6
+		-0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //2
+
+	    -0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //2
+		 0.5f,  0.5f,  0.5f,  1.0f / 3.0f, 1.0f, //1
+		 0.5f,  0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //5
 };
-std::map<char, Character> Characters; //Will hold a character for each possible char value- ergo, each ASCII character
 
-void Window_Resize_Callback(GLFWwindow* window, int width, int height)
+glm::vec3 cubeposition = {2.0f,0.0f,0.0f};
+
+float dt = 0;
+float FOV = 105.0f;
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 cameraFront = glm::vec3(1.0f, 0.0f, 0.0f);
+glm::vec3 cameraUp = glm::vec3(0.0f, 0.0f, 1.0f);
+bool debugHUD = false;
+bool last_LALT = false;
+bool last_F1 = false;
+bool RawMouse = true;
+bool CaptureMouse = true;
+
+bool firstMouse = true;
+
+float yaw = 0.0f;
+float pitch = 0.0f;
+float lastX = xResolution / 2.0;
+float lastY = yResolution / 2.0;
+
+
+
+  /////////////////////////
+ // FUNCTION DEFINITION //
+/////////////////////////
+
+void Get_Input(GLFWwindow *window) {
+	#ifndef RELEASE
+	
+	if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_RELEASE && last_F1) {
+		debugHUD = !debugHUD;
+	} //Every time F1 is pressed, toggle the visibility of the debug menu, if this is a debug build
+	#endif
+	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_RELEASE && last_LALT) {
+		if (CaptureMouse) {
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+		}
+		else {
+			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+		}
+		CaptureMouse = !CaptureMouse;
+	} //Every time Left Alt is pressed, capture/release mouse
+
+	float cameraSpeed = static_cast<float>(2.5 * dt); 
+	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+		cameraPos += cameraSpeed * cameraFront;
+	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+		cameraPos -= cameraSpeed * cameraFront;
+	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+		cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+		cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+	if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+		cameraPos += cameraSpeed * cameraUp;
+	if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+		cameraPos -= cameraSpeed * cameraUp;
+
+	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) {
+		last_LALT = true;
+	}
+	else {
+		last_LALT = false;
+	}
+
+	if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS) {
+		last_F1 = true;
+	}
+	else {
+		last_F1 = false;
+	}
+	
+} //GLFW callback for handling keyboard input
+
+void Mouse_Callback(GLFWwindow* window, double xposIn, double yposIn) {
+	float xpos = static_cast<float>(xposIn);
+	float ypos = static_cast<float>(yposIn);
+
+	if (firstMouse) {
+		lastX = xpos;
+		lastY = ypos;
+		firstMouse = false;
+	}
+	if (CaptureMouse) {
+		float xoffset = xpos - lastX;
+		float yoffset = lastY - ypos; //y coordinates go from bottom to top
+		lastX = xpos;
+		lastY = ypos;
+
+		float sensitivity = 0.1f;
+		xoffset *= sensitivity;
+		yoffset *= sensitivity;
+
+		yaw += xoffset;
+		pitch += yoffset;
+
+		if (pitch > 89.0f)
+			pitch = 89.0f;
+		if (pitch < -89.0f)
+			pitch = -89.0f;
+
+		glm::vec3 front;
+		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
+		front.y = sin(glm::radians(pitch));
+		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+		cameraFront = glm::normalize(front);
+	} //Only move camera with mouse if mouse is captured
+
+} //GLFW callback for handling mouselook
+
+void Scroll_Callback(GLFWwindow* window, double xoffset, double yoffset)
 {
+	FOV -= (float)yoffset;
+	if (FOV < 1.0f)
+		FOV = 1.0f;
+	if (FOV > 120.0f)
+		FOV = 120.0f;
+} //GLFW callback for handling scroll wheel
+
+void Window_Resize_Callback(GLFWwindow* window, int width, int height) {
 	glViewport(0, 0, width, height); //When user resizes window, adjust viewport to match
 } //Define callback for when user changes window size
 
@@ -124,6 +341,8 @@ void OpenGL_Debug_Callback(GLenum source,GLenum type,GLuint id,GLenum severity,G
 				break;
 			}
 			ERROR << "Severity: HIGH | MESSAGE: " << message << "\n";
+
+			exit(-1);
 		default:
 			DEBUG << "OpenGL - ";
 			switch (source) {
@@ -205,6 +424,7 @@ const char* getFreeTypeErrorMessage(FT_Error err) {
 } //Function to extract error messages from FreeType functions
 
 void RenderText(unsigned int TEXTSHADERPROGRAM, std::string text, float x, float y, float scale, glm::vec3 color) {
+	
 	glUseProgram(TEXTSHADERPROGRAM); //Set OpenGL to correct context
 	glUniform3f(glGetUniformLocation(TEXTSHADERPROGRAM, "textColor"), color.x, color.y, color.z);
 	glActiveTexture(GL_TEXTURE0); //Set active texture to first texture
@@ -237,7 +457,9 @@ void RenderText(unsigned int TEXTSHADERPROGRAM, std::string text, float x, float
 		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); //Send new data to VBO
 		glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-		glDrawArrays(GL_TRIANGLES, 0, 6); //Draw... triangles? It's a quad guys, trust me
+		glDepthFunc(GL_ALWAYS); //Ignore depth test
+		glDrawArrays(GL_TRIANGLES, 0, 6); //Draw... triangles? They're quads guys, trust me
+		glDepthFunc(GL_LESS); //Re-enable depth test
 
 		x += (ch.Advance >> 6) * scale; //Move target x value forward by the forward of the character just drawn (have to get it out of 1/64th pixels and into full pixels)
 	}
@@ -246,6 +468,10 @@ void RenderText(unsigned int TEXTSHADERPROGRAM, std::string text, float x, float
 } //Draw text. Hopefully.
 
 
+
+  ////  //  ////////////////////////////  //  ////
+ ////  //  // !!! START FUNCTION !!! //  //  ////
+////  //  ////////////////////////////  //  ////
 
 int main() {
 
@@ -271,6 +497,13 @@ int main() {
 	}
 	glfwMakeContextCurrent(GameWindow); //Point OpenGL at the game window
 	glfwSetFramebufferSizeCallback(GameWindow, Window_Resize_Callback); //Enable window resize callback 
+	glfwSetCursorPosCallback(GameWindow, Mouse_Callback); //Enable mouselook callback
+	glfwSetScrollCallback(GameWindow, Scroll_Callback); //Enable scroll wheel callback
+
+	glfwSetInputMode(GameWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED); //Capture mouse by default
+	if (glfwRawMouseMotionSupported() && RawMouse) {
+		glfwSetInputMode(GameWindow, GLFW_RAW_MOUSE_MOTION, GLFW_TRUE);
+	} //If raw mouse input is working, and the player hasn't disabled it, use it.
 
 	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) //Initialize GLAD- OpenGL functions should now be accessible
 	{
@@ -278,11 +511,15 @@ int main() {
 		return -1;
 	}
 	
-	glEnable(GL_DEBUG_OUTPUT); //Turn on OpenGL debug logging
-	glDebugMessageCallback(OpenGL_Debug_Callback, 0);
+	#ifndef RELEASE //Turn on OpenGL debug logging if this is not a release build
+		glEnable(GL_DEBUG_OUTPUT);
+		glDebugMessageCallback(OpenGL_Debug_Callback, 0); //Attach debug output callback
+	#endif
+
 	glViewport(0, 0, xResolution, yResolution); //OpenGL viewport should take up the full screen space
 
 	glEnable(GL_BLEND); //Enable fragment blending (transparency)
+	glEnable(GL_DEPTH_TEST); //Enable depth buffer
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); //Select blend mode
 
       ////////////////////////////
@@ -290,7 +527,7 @@ int main() {
 	////////////////////////////
 
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER); //Create empty vertex shader
-	glShaderSource(vertexShader, 1, &vertexShaderSource, NULL); //Load vertex shader source code
+	glShaderSource(vertexShader, 1, &TextVSSource, NULL); //Load vertex shader source code
 	glCompileShader(vertexShader); //Compile vertex shader
 	
 	int success;
@@ -303,7 +540,7 @@ int main() {
 	}
 	
 	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER); //Create empty fragment shader
-	glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL); //Load fragment shader source code
+	glShaderSource(fragmentShader, 1, &TextFSSource, NULL); //Load fragment shader source code
 	glCompileShader(fragmentShader); //Compile fragment shader
 	
 	glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success); //Check to see if shader compiled properly
@@ -333,9 +570,6 @@ int main() {
 	glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, 0, glm::value_ptr(ProjectionMatrix));
 	//STUDY
 
-	  ////////////////////////////
-     // Text Rendering Shaders //
-    ////////////////////////////
 
 	glGenVertexArrays(1, &VAO); //Create empty Vertex Array Object
 	glGenBuffers(1, &VBO); //Create empty Vertex Buffer Object
@@ -346,6 +580,96 @@ int main() {
 	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0); 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
+
+
+
+	  ////////////////////////////
+     // Cube Rendering Shaders //
+    ////////////////////////////
+
+	unsigned int CameravertexShader = glCreateShader(GL_VERTEX_SHADER); //Create empty vertex shader
+	glShaderSource(CameravertexShader, 1, &CameraVSSource, NULL); //Load vertex shader source code
+	glCompileShader(CameravertexShader); //Compile vertex shader
+
+	glGetShaderiv(CameravertexShader, GL_COMPILE_STATUS, &success); //Check to see if shader compiled properly
+	if (!success)
+	{
+		glGetShaderInfoLog(CameravertexShader, 512, NULL, infoLog); //Error handling
+		ERROR << Header << "Error! Vertex shader compilation failed with message:\n" << infoLog << "\n";
+	}
+
+	unsigned int CamerafragmentShader = glCreateShader(GL_FRAGMENT_SHADER); //Create empty fragment shader
+	glShaderSource(CamerafragmentShader, 1, &TextFSSource, NULL); //Load fragment shader source code
+	glCompileShader(CamerafragmentShader); //Compile fragment shader
+
+	glGetShaderiv(CamerafragmentShader, GL_COMPILE_STATUS, &success); //Check to see if shader compiled properly
+	if (!success)
+	{
+		glGetShaderInfoLog(CamerafragmentShader, 512, NULL, infoLog); //Error handling
+		ERROR << Header << "Error! Fragment shader compilation failed with message:\n" << infoLog << "\n";
+	}
+
+	unsigned int CamerashaderProgram = glCreateProgram(); //Create empty shader program
+	glAttachShader(CamerashaderProgram, CameravertexShader); //Attach shaders to program
+	glAttachShader(CamerashaderProgram, CamerafragmentShader);
+	glLinkProgram(CamerashaderProgram); //Link shader program to GPU
+
+	glGetProgramiv(CamerashaderProgram, GL_LINK_STATUS, &success); //Check to see if linking executed properly
+	if (!success) {
+		glGetProgramInfoLog(CamerashaderProgram, 512, NULL, infoLog); //Error handling
+		ERROR << Header << "Error! Shader linking failed with message:\n" << infoLog << "\n";
+	}
+	glDeleteShader(CameravertexShader); //Delete shaders (their contents are now a part of the shader program)
+	glDeleteShader(CamerafragmentShader);
+
+	unsigned int VBO1, VAO1;
+	glGenVertexArrays(1, &VAO1);
+	glGenBuffers(1, &VBO1);
+
+	glBindVertexArray(VAO1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO1);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cube), cube, GL_STATIC_DRAW);
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0); //For vertex coordinates
+	glEnableVertexAttribArray(0);
+	
+	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float))); //For texture coordinates
+	glEnableVertexAttribArray(1);
+
+
+
+	  /////////////////////////
+	 // Import Cube Texture //
+	/////////////////////////
+
+	unsigned int cubetexture;
+	glGenTextures(1, &cubetexture);
+	glBindTexture(GL_TEXTURE_2D, cubetexture);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); //Set texture wrapping mode
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); //Set texture filtering to linear
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	int width, height, nrChannels; //Resolution and color depth to load image with
+	stbi_set_flip_vertically_on_load(true); //Don't load the image upside down
+	unsigned char *data = stbi_load("C:/Artifice/x64/Debug/textures/grass.png", &width, &height, &nrChannels, 0);
+	if (data)
+	{
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+	}
+	else
+	{
+		ERROR << Header << "Failed to load texture" << "\n";
+	}
+	stbi_image_free(data); //Return the memory of the raw texture data from file
+
+	glUseProgram(CamerashaderProgram);
+	glUniform1i(glGetUniformLocation(CamerashaderProgram, "texture"), 0);
+
 
 
       /////////////////////////////
@@ -380,7 +704,7 @@ int main() {
 		glGenTextures(1, &texture); //Create font texture
 		glBindTexture(GL_TEXTURE_2D, texture); //Bind texture for processing
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, face->glyph->bitmap.width, face->glyph->bitmap.rows, 0, GL_RED, GL_UNSIGNED_BYTE, face->glyph->bitmap.buffer);
-		// I NEED TO BREAK DOWN THIS COMMAND AND UNDERSTAND IT FULLY
+		//STUDY
 
 		//Set texture parameters
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -404,11 +728,13 @@ int main() {
 
 	glm::vec3 messagergb;
 	float t = 0.0f;
-	float dt;
 	float FPS;
-	bool debugmenu = true;
+	float rotationangle;
+	
 	std::string debugmessage;
-	std::string message = "I'm in love with Michelle Passmore";
+	std::string debugcamerapos;
+	//std::string debugvideomode;
+	std::string message = "Arbitrary text goes here";
 
 
 	  ////  //  ///////////////////////  //  ////
@@ -426,12 +752,47 @@ int main() {
 		FPS = 1.0f / dt; //Find FPS
 		t = glfwGetTime();
 
+		Get_Input(GameWindow);
+
+		//RENDER 3-D
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D,cubetexture);
+		glBindVertexArray(VAO1);
+
+		glUseProgram(CamerashaderProgram); //Put OpenGL into the correct state
+
+		glm::mat4 projection = glm::perspective(glm::radians(FOV), (float)xResolution / (float)yResolution, 0.1f, 100.0f); //Construct projection matrix
+		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "projection"), 1, GL_FALSE, &projection[0][0]);
+
+		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
+		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "view"), 1, GL_FALSE, &view[0][0]);
+
+		
+		glBindBuffer(GL_ARRAY_BUFFER,VBO1);
+
+		glm::mat4 model = glm::mat4(1.0f); //Initialize matrix as an identity matrix
+		model = glm::translate(model, cubeposition);
+		rotationangle = glfwGetTime() / 20.0f;
+		model = glm::rotate(model, glm::radians(rotationangle), glm::vec3(1.0f, 0.3f, 0.5f));
+		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "model"), 1, GL_FALSE, &model[0][0]);
+
+		glDrawArrays(GL_TRIANGLES, 0, 36);
+
+		glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		//RENDER TEXT
+
 		RenderText(shaderProgram, message, static_cast<float>(xResolution) * 1.5f / 10.0f, static_cast<float>(yResolution) * 5.0f / 10.0f, 1.0f, messagergb);
 
-		if (debugmenu) {
+		if (debugHUD) {
 
-			debugmessage = "ARTIFICE v0 " + std::to_string(FPS) + " FPS";
+			debugmessage = "ARTIFICE v0.0 " + std::to_string(FPS) + " FPS";
 			RenderText(shaderProgram, debugmessage, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.5f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
+			debugcamerapos = "X: " + std::to_string(cameraPos.x) + "  Y: " + std::to_string(cameraPos.y) + "  Z: " + std::to_string(cameraPos.z) + "  Yaw: " + std::to_string(yaw) + "  Pitch: " + std::to_string(pitch);
+			RenderText(shaderProgram, debugcamerapos, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.25f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
+			//debugvideomode = std::to_string(GameWindow.width) + " x ";
 		}
 		
 		glfwSwapBuffers(GameWindow); //Display new frame
@@ -440,6 +801,11 @@ int main() {
 
 	}
 
+	glDeleteVertexArrays(1, &VAO);
+	glDeleteBuffers(1, &VBO);
+
+	glDeleteVertexArrays(1, &VAO1);
+	glDeleteBuffers(1, &VBO1);
 
 	glfwTerminate(); //Close out
 	return 0;
