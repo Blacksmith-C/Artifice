@@ -18,6 +18,9 @@
 #define STB_IMAGE_IMPLEMENTATION //Required by image reader to initialize correctly
 #include <stb_image.h> //Load image reader for accessing textures
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb_image_write.h> //Just for test purposes
+
 
 
   /////////////
@@ -45,7 +48,9 @@ struct Character {
 	glm::ivec2 Bearing; //Offsets from baseline to left/top of glyph
 	unsigned int Advance; //Horizontal distance to start of next glyph
 };
-std::map<char, Character> Characters; //Will hold a character for each possible char value- ergo, each ASCII character
+std::map<char, Character> Alphabet; //Will hold a character for each possible char value- ergo, each ASCII character
+
+
 
 
 
@@ -60,7 +65,7 @@ unsigned int VAO, VBO; //Initialize VAO, VBO
 
 const char *fontname = "C:/Artifice/x64/Debug/fonts/CourierNew.ttf";
 
-const char *TextVSSource = "#version 460 core\n"
+const char *TextVSSource = "#version 460 core \n"
 "layout (location = 0) in vec4 vertex;\n"
 "out vec2 TexCoords;\n"
 "uniform mat4 projection;\n"
@@ -81,6 +86,7 @@ const char *TextFSSource = "#version 460 core\n"
 "   color = vec4(textColor, 1.0) * sampled;\n"
 "}\n\0";
 
+
 const char *CameraVSSource = "#version 460 core\n"
 "layout (location = 0) in vec3 aPos;\n"
 "layout (location = 1) in vec2 aTexCoord;\n"
@@ -97,80 +103,81 @@ const char *CameraVSSource = "#version 460 core\n"
 const char *CameraFSSource = "#version 460 core\n"
 "in vec2 TexCoords;\n"
 "out vec4 FragColor;\n"
-"uniform sampler2D texture;\n"
+"uniform sampler2D cubetexture;\n"
 "void main()\n"
 "{\n"
-"   FragColor = texture(texture, TexCoords);\n"
+"   FragColor = texture(cubetexture, TexCoords);\n"
 "}\n\0";
-
 
 
 float cube[] = {
 		//BOTTOM FACE
 	     0.5f,  0.5f, -0.5f,  1.0f, 1.0f, //5
-		-0.5f,  0.5f, -0.5f,  2.0f/3.0f, 1.0f, //6
-		-0.5f, -0.5f, -0.5f,  2.0f/3.0f, 0.0f, //7
-	
-	    -0.5f, -0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //7
+		-0.5f,  0.5f, -0.5f,  65.0f / 96.0f, 1.0f, //6
+		-0.5f, -0.5f, -0.5f,  65.0f / 96.0f, 0.0f, //7
+	    
+	    -0.5f, -0.5f, -0.5f,  65.0f / 96.0f, 0.0f, //7
 		 0.5f, -0.5f, -0.5f,  1.0f, 0.0f, //8
 		 0.5f,  0.5f, -0.5f,  1.0f, 1.0f, //5 
 
 		//TOP FACE
-		 0.5f,  0.5f,  0.5f,  1.0f/3.0f, 1.0f, //1
+		 0.5f,  0.5f,  0.5f,  32.0f / 96.0f, 1.0f, //1
 		-0.5f,  0.5f,  0.5f,  0.0f, 1.0f, //2
 		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, //3
 		
 		-0.5f, -0.5f,  0.5f,  0.0f, 0.0f, //3
-		 0.5f, -0.5f,  0.5f,  1.0f/3.0f, 0.0f, //4
-		 0.5f,  0.5f,  0.5f,  1.0f/3.0f, 1.0f, //1
+		 0.5f, -0.5f,  0.5f,  32.0f / 96.0f, 0.0f, //4
+		 0.5f,  0.5f,  0.5f,  32.0f / 96.0f, 1.0f, //1
 
 		//WEST FACE
-		-0.5f,  0.5f, -0.5f,  1.0f/3.0f, 0.0f, //6
-		-0.5f,  0.5f,  0.5f,  1.0f/3.0f, 1.0f, //2
-		-0.5f, -0.5f,  0.5f,  2.0f/3.0f, 1.0f, //3
+		-0.5f,  0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //6
+		-0.5f,  0.5f,  0.5f,  33.0f / 96.0f, 1.0f, //2
+		-0.5f, -0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //3
 
-		-0.5f, -0.5f,  0.5f,  2.0f/3.0f, 1.0f, //3
-		-0.5f, -0.5f, -0.5f,  2.0f/3.0f, 0.0f, //7
-		-0.5f,  0.5f, -0.5f,  1.0f/3.0f, 0.0f, //6
+		-0.5f, -0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //3
+		-0.5f, -0.5f, -0.5f,  64.0f / 96.0f, 0.0f, //7
+		-0.5f,  0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //6
 
 		//EAST FACE
-		 0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //1
-		 0.5f,  0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //5
-		 0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //8
+		 0.5f,  0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //1
+		 0.5f,  0.5f, -0.5f,  64.0f / 96.0f, 0.0f, //5
+		 0.5f, -0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //8
 
-		 0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //8
-		 0.5f, -0.5f,  0.5f,  1.0f / 3.0f, 1.0f, //4
-		 0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //1
+		 0.5f, -0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //8
+		 0.5f, -0.5f,  0.5f,  33.0f / 96.0f, 1.0f, //4
+		 0.5f,  0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //1
 
 		 //SOUTH FACE
-		-0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //7
-		 0.5f, -0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //8
-		 0.5f, -0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //4
+		-0.5f, -0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //7
+		 0.5f, -0.5f, -0.5f,  64.0f / 96.0f, 0.0f, //8
+		 0.5f, -0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //4
 
-		 0.5f, -0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //4
-		-0.5f, -0.5f,  0.5f,  1.0f / 3.0f, 1.0f, //3
-		-0.5f, -0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //7
+		 0.5f, -0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //4
+		-0.5f, -0.5f,  0.5f,  33.0f / 96.0f, 1.0f, //3
+		-0.5f, -0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //7
 
 		//NORTH FACE
-		 0.5f,  0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //5
-		-0.5f,  0.5f, -0.5f,  2.0f / 3.0f, 0.0f, //6
-		-0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //2
+		 0.5f,  0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //5
+		-0.5f,  0.5f, -0.5f,  64.0f / 96.0f, 0.0f, //6
+		-0.5f,  0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //2
 
-	    -0.5f,  0.5f,  0.5f,  2.0f / 3.0f, 1.0f, //2
-		 0.5f,  0.5f,  0.5f,  1.0f / 3.0f, 1.0f, //1
-		 0.5f,  0.5f, -0.5f,  1.0f / 3.0f, 0.0f, //5
+	    -0.5f,  0.5f,  0.5f,  64.0f / 96.0f, 1.0f, //2
+		 0.5f,  0.5f,  0.5f,  33.0f / 96.0f, 1.0f, //1
+		 0.5f,  0.5f, -0.5f,  33.0f / 96.0f, 0.0f, //5
 };
 
 glm::vec3 cubeposition = {2.0f,0.0f,0.0f};
 
 float dt = 0;
 float FOV = 105.0f;
-glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 0.0f);
+glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 0.0f); 
 glm::vec3 cameraFront = glm::vec3(1.0f, 0.0f, 0.0f);
 glm::vec3 cameraUp = glm::vec3(0.0f, 0.0f, 1.0f);
 bool debugHUD = false;
+bool Wireframe = false;
 bool last_LALT = false;
 bool last_F1 = false;
+bool last_F3 = false;
 bool RawMouse = true;
 bool CaptureMouse = true;
 
@@ -193,6 +200,16 @@ void Get_Input(GLFWwindow *window) {
 	if (glfwGetKey(window, GLFW_KEY_F1) == GLFW_RELEASE && last_F1) {
 		debugHUD = !debugHUD;
 	} //Every time F1 is pressed, toggle the visibility of the debug menu, if this is a debug build
+
+	if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_RELEASE && last_F3) {
+		if (!Wireframe) {
+			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		}
+		else {
+			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		}
+		Wireframe = !Wireframe;
+	} //Every time F3 is pressed, toggle Wireframe mode, if this is a debug build
 	#endif
 	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_RELEASE && last_LALT) {
 		if (CaptureMouse) {
@@ -203,6 +220,10 @@ void Get_Input(GLFWwindow *window) {
 		}
 		CaptureMouse = !CaptureMouse;
 	} //Every time Left Alt is pressed, capture/release mouse
+
+	
+
+	
 
 	float cameraSpeed = static_cast<float>(2.5 * dt); 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -231,6 +252,13 @@ void Get_Input(GLFWwindow *window) {
 	else {
 		last_F1 = false;
 	}
+
+	if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS) {
+		last_F3 = true;
+	}
+	else {
+		last_F3 = false;
+	}
 	
 } //GLFW callback for handling keyboard input
 
@@ -253,18 +281,24 @@ void Mouse_Callback(GLFWwindow* window, double xposIn, double yposIn) {
 		xoffset *= sensitivity;
 		yoffset *= sensitivity;
 
-		yaw += xoffset;
+		yaw -= xoffset;
 		pitch += yoffset;
 
-		if (pitch > 89.0f)
-			pitch = 89.0f;
-		if (pitch < -89.0f)
-			pitch = -89.0f;
+		//Bounds on mouselook freedom
+		if (pitch > 89.9f)
+			pitch = 89.9f;
+		if (pitch < -89.9f)
+			pitch = -89.9f;
+		if (yaw > 180.0f)
+			yaw -= 360.0f;
+		if (yaw < -180.0f)
+			yaw += 360.0f;
 
-		glm::vec3 front;
+		glm::vec3 front; 
 		front.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-		front.y = sin(glm::radians(pitch));
-		front.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+		front.y = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
+		front.z = sin(glm::radians(pitch));
+		
 		cameraFront = glm::normalize(front);
 	} //Only move camera with mouse if mouse is captured
 
@@ -430,10 +464,13 @@ void RenderText(unsigned int TEXTSHADERPROGRAM, std::string text, float x, float
 	glActiveTexture(GL_TEXTURE0); //Set active texture to first texture
 	glBindVertexArray(VAO);
 
+	glEnable(GL_BLEND); //Enable fragment blending (transparency)
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); //Select blend mode
+
 	std::string::const_iterator c; //Sorcery
 	for (c = text.begin(); c != text.end(); c++)
 	{
-  		Character ch = Characters[*c];
+  		Character ch = Alphabet[*c];
 
 		float xpos = x + ch.Bearing.x * scale;
 		float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
@@ -463,6 +500,9 @@ void RenderText(unsigned int TEXTSHADERPROGRAM, std::string text, float x, float
 
 		x += (ch.Advance >> 6) * scale; //Move target x value forward by the forward of the character just drawn (have to get it out of 1/64th pixels and into full pixels)
 	}
+	
+	glDisable(GL_BLEND);
+	
 	glBindVertexArray(0); //Unbind VAO
 	glBindTexture(GL_TEXTURE_2D, 0); //Unbind font texture
 } //Draw text. Hopefully.
@@ -518,9 +558,14 @@ int main() {
 
 	glViewport(0, 0, xResolution, yResolution); //OpenGL viewport should take up the full screen space
 
-	glEnable(GL_BLEND); //Enable fragment blending (transparency)
+	//
 	glEnable(GL_DEPTH_TEST); //Enable depth buffer
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); //Select blend mode
+	//
+
+
+
+	int success;
+	char infoLog[512];
 
       ////////////////////////////
 	 // Text Rendering Shaders //
@@ -530,8 +575,7 @@ int main() {
 	glShaderSource(vertexShader, 1, &TextVSSource, NULL); //Load vertex shader source code
 	glCompileShader(vertexShader); //Compile vertex shader
 	
-	int success;
-	char infoLog[512];
+	
 	glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success); //Check to see if shader compiled properly
 	if (!success)
 	{
@@ -599,7 +643,7 @@ int main() {
 	}
 
 	unsigned int CamerafragmentShader = glCreateShader(GL_FRAGMENT_SHADER); //Create empty fragment shader
-	glShaderSource(CamerafragmentShader, 1, &TextFSSource, NULL); //Load fragment shader source code
+	glShaderSource(CamerafragmentShader, 1, &CameraFSSource, NULL); //Load fragment shader source code
 	glCompileShader(CamerafragmentShader); //Compile fragment shader
 
 	glGetShaderiv(CamerafragmentShader, GL_COMPILE_STATUS, &success); //Check to see if shader compiled properly
@@ -619,8 +663,22 @@ int main() {
 		glGetProgramInfoLog(CamerashaderProgram, 512, NULL, infoLog); //Error handling
 		ERROR << Header << "Error! Shader linking failed with message:\n" << infoLog << "\n";
 	}
+	
+//#ifndef RELEASE //OUTPUT SHADER LOGS IF IN DEBUG
+//	glGetShaderInfoLog(CameravertexShader, 512, NULL, infoLog);
+//	DEBUG << "DEBUG | CAMERA VERTEX SHADER INFOLOG:\n" << infoLog << "\n\n";
+//
+//	glGetShaderInfoLog(CamerafragmentShader, 512, NULL, infoLog);
+//	DEBUG << "DEBUG | CAMERA FRAGMENT SHADER INFOLOG:\n" << infoLog << "\n\n";
+//
+//	glGetProgramInfoLog(CamerashaderProgram, 512, NULL, infoLog);
+//	DEBUG << "DEBUG | CAMERA SHADER PROGRAM INFOLOG:\n" << infoLog << "\n\n";
+//#endif
+	
 	glDeleteShader(CameravertexShader); //Delete shaders (their contents are now a part of the shader program)
 	glDeleteShader(CamerafragmentShader);
+
+
 
 	unsigned int VBO1, VAO1;
 	glGenVertexArrays(1, &VAO1);
@@ -645,30 +703,35 @@ int main() {
 
 	unsigned int cubetexture;
 	glGenTextures(1, &cubetexture);
+	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, cubetexture);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); //Set texture wrapping mode
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); //Set texture filtering to linear
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); //Set texture filtering to linear
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	int width, height, nrChannels; //Resolution and color depth to load image with
+	int width, height, nrChannels; //Resolution and color depth of loaded image
 	stbi_set_flip_vertically_on_load(true); //Don't load the image upside down
 	unsigned char *data = stbi_load("C:/Artifice/x64/Debug/textures/grass.png", &width, &height, &nrChannels, 0);
 	if (data)
 	{
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		glGenerateMipmap(GL_TEXTURE_2D);
 	}
 	else
 	{
 		ERROR << Header << "Failed to load texture" << "\n";
 	}
+	
+	//const char *FileName = "exportedtexture.jpg";
+	//stbi_write_jpg(FileName,96,32,3,data,90);
+	
 	stbi_image_free(data); //Return the memory of the raw texture data from file
 
 	glUseProgram(CamerashaderProgram);
-	glUniform1i(glGetUniformLocation(CamerashaderProgram, "texture"), 0);
+	glUniform1i(glGetUniformLocation(CamerashaderProgram, "cubetexture"), 1);
 
 
 
@@ -714,7 +777,7 @@ int main() {
 
 		//Store character into vector for later use
 		Character character = { texture,glm::ivec2(face->glyph->bitmap.width,face->glyph->bitmap.rows),glm::ivec2(face->glyph->bitmap_left,face->glyph->bitmap_top),static_cast<unsigned int>(face->glyph->advance.x) };
-		Characters.insert(std::pair<char, Character>(c, character)); //Insert created character and corresponding ASCII number into the map
+		Alphabet.insert(std::pair<char, Character>(c, character)); //Insert created character and corresponding ASCII number into the map
 	}
 	glBindTexture(GL_TEXTURE_2D, 0);
 
@@ -733,8 +796,8 @@ int main() {
 	
 	std::string debugmessage;
 	std::string debugcamerapos;
-	//std::string debugvideomode;
-	std::string message = "Arbitrary text goes here";
+	std::string debugvideomode;
+	std::string message = "was poppin";
 
 
 	  ////  //  ///////////////////////  //  ////
@@ -745,37 +808,48 @@ int main() {
 	{
 
 		glClearColor(0.05f,0.1f,0.2f,1.0f);
-		glClear(GL_COLOR_BUFFER_BIT); //Set back buffer to solid dark sky color
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); //Set back buffer to solid dark sky color
 		
+
 		messagergb = {0.5*sin(t)+0.5f,0.5*sin(t * 1.5f)+0.5f,0.5*sin(t*0.5f)+0.5f}; //Set Text color to rainbow :D
 		dt = glfwGetTime()-t;
 		FPS = 1.0f / dt; //Find FPS
 		t = glfwGetTime();
 
+		//HANDLE INPUT
+
 		Get_Input(GameWindow);
 
 		//RENDER 3-D
 
+		
+		
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D,cubetexture);
+		glBindTexture(GL_TEXTURE_2D, cubetexture);
 		glBindVertexArray(VAO1);
-
+		
 		glUseProgram(CamerashaderProgram); //Put OpenGL into the correct state
+		
 
+		glBindBuffer(GL_ARRAY_BUFFER, VBO1);
+
+		//glm::mat4 projection = glm::mat4(1.0f);
 		glm::mat4 projection = glm::perspective(glm::radians(FOV), (float)xResolution / (float)yResolution, 0.1f, 100.0f); //Construct projection matrix
-		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "projection"), 1, GL_FALSE, &projection[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
+		//glm::mat4 view = glm::mat4(1.0f);
 		glm::mat4 view = glm::lookAt(cameraPos, cameraPos + cameraFront, cameraUp);
-		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "view"), 1, GL_FALSE, &view[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
 
 		
-		glBindBuffer(GL_ARRAY_BUFFER,VBO1);
 
 		glm::mat4 model = glm::mat4(1.0f); //Initialize matrix as an identity matrix
 		model = glm::translate(model, cubeposition);
-		rotationangle = glfwGetTime() / 20.0f;
+		rotationangle = glfwGetTime() / 0.2f;
 		model = glm::rotate(model, glm::radians(rotationangle), glm::vec3(1.0f, 0.3f, 0.5f));
-		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "model"), 1, GL_FALSE, &model[0][0]);
+		glUniformMatrix4fv(glGetUniformLocation(CamerashaderProgram, "model"), 1, GL_FALSE, glm::value_ptr(model));
+
+		
 
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 
@@ -786,19 +860,27 @@ int main() {
 
 		RenderText(shaderProgram, message, static_cast<float>(xResolution) * 1.5f / 10.0f, static_cast<float>(yResolution) * 5.0f / 10.0f, 1.0f, messagergb);
 
+	#ifndef RELEASE
 		if (debugHUD) {
 
 			debugmessage = "ARTIFICE v0.0 " + std::to_string(FPS) + " FPS";
 			RenderText(shaderProgram, debugmessage, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.5f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
 			debugcamerapos = "X: " + std::to_string(cameraPos.x) + "  Y: " + std::to_string(cameraPos.y) + "  Z: " + std::to_string(cameraPos.z) + "  Yaw: " + std::to_string(yaw) + "  Pitch: " + std::to_string(pitch);
 			RenderText(shaderProgram, debugcamerapos, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.25f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
-			//debugvideomode = std::to_string(GameWindow.width) + " x ";
+			debugvideomode = std::to_string(xResolution) + " x " + std::to_string(yResolution);
+			if (Wireframe) {
+				debugvideomode += " WIREFRAME\n";
+			}
+			else {
+				debugvideomode += "\n";
+			}
+			RenderText(shaderProgram, debugvideomode, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.0f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
 		}
-		
+	#endif
+
+
 		glfwSwapBuffers(GameWindow); //Display new frame
 		glfwPollEvents(); //Check for new events
-
-
 	}
 
 	glDeleteVertexArrays(1, &VAO);
