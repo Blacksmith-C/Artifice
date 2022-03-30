@@ -4,8 +4,10 @@
 
 #include <iostream> //For debug
 #include <map> //Map map
-#include <string> //Silly string
+#include <string.h> //Silly string
 #include <filesystem> //For loading font files
+
+#include <windows.h> //Platform dependent stuff
 
 #include <glad/glad.h> //Bind OpenGL to functions
 #include <GLFW/glfw3.h> //Connect OpenGL to GPU
@@ -62,8 +64,6 @@ const unsigned int xResolution = 1920; //Set window width
 const unsigned int yResolution = 1080; //Set window height
 
 unsigned int VAO, VBO; //Initialize VAO, VBO
-
-const char *fontname = "C:/Artifice/x64/Debug/fonts/CourierNew.ttf";
 
 const char *TextVSSource = "#version 460 core \n"
 "layout (location = 0) in vec4 vertex;\n"
@@ -558,9 +558,8 @@ int main() {
 
 	glViewport(0, 0, xResolution, yResolution); //OpenGL viewport should take up the full screen space
 
-	//
 	glEnable(GL_DEPTH_TEST); //Enable depth buffer
-	//
+	
 
 
 
@@ -664,7 +663,7 @@ int main() {
 		ERROR << Header << "Error! Shader linking failed with message:\n" << infoLog << "\n";
 	}
 	
-//#ifndef RELEASE //OUTPUT SHADER LOGS IF IN DEBUG
+//#ifndef RELEASE //FORCE OUTPUT SHADER LOGS IF IN DEBUG
 //	glGetShaderInfoLog(CameravertexShader, 512, NULL, infoLog);
 //	DEBUG << "DEBUG | CAMERA VERTEX SHADER INFOLOG:\n" << infoLog << "\n\n";
 //
@@ -714,7 +713,13 @@ int main() {
 
 	int width, height, nrChannels; //Resolution and color depth of loaded image
 	stbi_set_flip_vertically_on_load(true); //Don't load the image upside down
-	unsigned char *data = stbi_load("C:/Artifice/x64/Debug/textures/grass.png", &width, &height, &nrChannels, 0);
+
+	
+	std::filesystem::path myPath69 = std::filesystem::current_path(); //Get working directory
+	std::string myPath11 = myPath69.string(); //Convert working directory to string
+	myPath11 += "\\textures\\grass.png"; //Append file location to working directory
+
+	unsigned char *data = stbi_load(myPath11.c_str(), &width, &height, &nrChannels, 0);
 	if (data)
 	{
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
@@ -739,6 +744,10 @@ int main() {
 	 // FreeType Initialization //
 	/////////////////////////////
 
+	myPath69 = std::filesystem::current_path(); //Get working directory
+	myPath11 = myPath69.string(); //Convert working directory to string
+	myPath11 += "\\fonts\\CourierNew.ttf"; //Append file location to working directory
+
 	FT_Library ft; //Load FreeType for text rendering
 	if (FT_Init_FreeType(&ft)) {
 		ERROR << Header << "Terminating! FreeType library failed to initialize with following message:\n " << getFreeTypeErrorMessage(FT_Init_FreeType(&ft)) << "\n";
@@ -747,8 +756,8 @@ int main() {
 
 
 	FT_Face face; //Create font face from file
-	if (FT_New_Face(ft, fontname, 0, &face)) {
-		ERROR << Header << "Terminating! FreeType library failed to load font file with following message:\n " << getFreeTypeErrorMessage(FT_New_Face(ft, fontname, 0, &face)) << "\n";
+	if (FT_New_Face(ft, myPath11.c_str(), 0, &face)) {
+		ERROR << Header << "Terminating! FreeType library failed to load font file with following message:\n " << getFreeTypeErrorMessage(FT_New_Face(ft, myPath11.c_str(), 0, &face)) << "\n" << myPath11.c_str() << "\n";
 		return -1;
 	}
 
@@ -863,7 +872,7 @@ int main() {
 	#ifndef RELEASE
 		if (debugHUD) {
 
-			debugmessage = "ARTIFICE v0.0 " + std::to_string(FPS) + " FPS";
+			debugmessage = "ARTIFICE v0.1 " + std::to_string(FPS) + " FPS";
 			RenderText(shaderProgram, debugmessage, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.5f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
 			debugcamerapos = "X: " + std::to_string(cameraPos.x) + "  Y: " + std::to_string(cameraPos.y) + "  Z: " + std::to_string(cameraPos.z) + "  Yaw: " + std::to_string(yaw) + "  Pitch: " + std::to_string(pitch);
 			RenderText(shaderProgram, debugcamerapos, static_cast<float>(xResolution) / 40.0f, static_cast<float>(yResolution) * 9.25f / 10.0f, 0.25f, glm::vec3{ 0.8f,0.8f,0.8f });
