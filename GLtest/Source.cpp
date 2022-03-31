@@ -50,7 +50,17 @@ struct Character {
 	glm::ivec2 Bearing; //Offsets from baseline to left/top of glyph
 	unsigned int Advance; //Horizontal distance to start of next glyph
 };
-std::map<char, Character> Alphabet; //Will hold a character for each possible char value- ergo, each ASCII character
+std::map<unsigned int, Character> Alphabet; //Will hold a character for each loaded uint value- ergo, each needed Unicode character
+
+struct TextField {
+	std::vector<unsigned int> Chars; //List of codes representing the characters which make up the text field
+	std::list<std::vector<unsigned char>> Formatting; //Each char represents a formatting change to apply to rendered characters, beginning with the character in the corresponding position of the Chars vector
+	
+	unsigned int MaxLength = 512; //How many characters allowed in a single text field (defaults to 512)
+	unsigned char RowLength = 128; //How many characters to allow in a row (defaults to 128)
+	float x, y; //Starting location of first character in first row
+	float Scale = 1.0f; //Scale for characters, if no formatting modifies it
+};
 
 
 
@@ -59,6 +69,8 @@ std::map<char, Character> Alphabet; //Will hold a character for each possible ch
   //////////////////////////
  // INITIALIZE VARIABLES //
 //////////////////////////
+
+FT_Face face; //Create font face from file, !!! CAN NOT USE FREETYPE UNTIL IT IS INITIALIZED LATER !!!
 
 const unsigned int xResolution = 1920; //Set window width
 const unsigned int yResolution = 1080; //Set window height
@@ -177,9 +189,11 @@ bool debugHUD = false;
 bool Wireframe = false;
 bool last_LALT = false;
 bool last_F1 = false;
+bool last_F2 = false;
 bool last_F3 = false;
 bool RawMouse = true;
 bool CaptureMouse = true;
+
 
 bool firstMouse = true;
 
@@ -188,7 +202,14 @@ float pitch = 0.0f;
 float lastX = xResolution / 2.0;
 float lastY = yResolution / 2.0;
 
+unsigned int new_character = 0;
 
+bool KeyboardFocus = false;
+bool new_text = false; 
+bool KeyboardItalic = false;
+bool KeyboardBold = false;
+bool KeyboardUnderline = false;
+bool KeyboardStrikethrough = false;
 
   /////////////////////////
  // FUNCTION DEFINITION //
@@ -201,6 +222,16 @@ void Get_Input(GLFWwindow *window) {
 		debugHUD = !debugHUD;
 	} //Every time F1 is pressed, toggle the visibility of the debug menu, if this is a debug build
 
+	if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_RELEASE && last_F2) {
+
+		byte *pixels = new byte[3 * xResolution * yResolution]; //Allocate 3 bytes of memory on the heap for each pixel on the screen (one each for R, G, & B [this is probably a terrible way to do this, woops])
+		glReadPixels(0, 0, xResolution, yResolution, GL_RGB, GL_BYTE, pixels); //Copy screen buffer pixels to memory
+		stbi_flip_vertically_on_write(1);
+		std::string screenshotname = std::to_string(glfwGetTime()) + ".png";
+		stbi_write_png(screenshotname.c_str(), xResolution, yResolution, 3, pixels, 3 * xResolution); //Write jpg from memory
+		delete pixels; //Screenshot in memory is a big object, so delete it immediately
+	} //Every time F2 is pressed, take a screenshot
+
 	if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_RELEASE && last_F3) {
 		if (!Wireframe) {
 			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -210,7 +241,10 @@ void Get_Input(GLFWwindow *window) {
 		}
 		Wireframe = !Wireframe;
 	} //Every time F3 is pressed, toggle Wireframe mode, if this is a debug build
+	
 	#endif
+
+
 	if (glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_RELEASE && last_LALT) {
 		if (CaptureMouse) {
 			glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
@@ -220,10 +254,6 @@ void Get_Input(GLFWwindow *window) {
 		}
 		CaptureMouse = !CaptureMouse;
 	} //Every time Left Alt is pressed, capture/release mouse
-
-	
-
-	
 
 	float cameraSpeed = static_cast<float>(2.5 * dt); 
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -253,6 +283,13 @@ void Get_Input(GLFWwindow *window) {
 		last_F1 = false;
 	}
 
+	if (glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS) {
+		last_F2 = true;
+	}
+	else {
+		last_F2 = false;
+	}
+
 	if (glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS) {
 		last_F3 = true;
 	}
@@ -261,6 +298,35 @@ void Get_Input(GLFWwindow *window) {
 	}
 	
 } //GLFW callback for handling keyboard input
+
+void Get_Text(GLFWwindow* window, unsigned int codepoint) {
+	
+	unsigned int PHchar = FT_Get_Char_Index(face, codepoint); //Ensure that the UTF32 designation of the character translates to a character in the font face
+
+	//Check to see if character has been loaded. If not, load it!
+	if (Alphabet.find(PHchar) == Alphabet.end()) {
+
+		FT_Load_Char(face, PHchar, FT_LOAD_RENDER); //Load character - FT_LOAD_RENDER results in an 8-bit grayscale bitmap being generated for the character
+
+		unsigned int PHtexture;
+		glGenTextures(1, &PHtexture); //Create font texture
+		glBindTexture(GL_TEXTURE_2D, PHtexture); //Bind texture for processing
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, face->glyph->bitmap.width, face->glyph->bitmap.rows, 0, GL_RED, GL_UNSIGNED_BYTE, face->glyph->bitmap.buffer);
+
+		//Set texture parameters
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		//Store character into vector for later use
+		Character character = { PHtexture,glm::ivec2(face->glyph->bitmap.width,face->glyph->bitmap.rows),glm::ivec2(face->glyph->bitmap_left,face->glyph->bitmap_top),static_cast<unsigned int>(face->glyph->advance.x) };
+		Alphabet.insert(std::pair<unsigned int, Character>(PHchar, character)); //Insert created character and corresponding ASCII number into the map
+	}
+
+	new_character = PHchar; //Pass the character key value to a variable for handling
+	new_text = true; //Flag that a new text character is waiting for use
+} //GLFW callback for handling text entry
 
 void Mouse_Callback(GLFWwindow* window, double xposIn, double yposIn) {
 	float xpos = static_cast<float>(xposIn);
@@ -507,6 +573,53 @@ void RenderText(unsigned int TEXTSHADERPROGRAM, std::string text, float x, float
 	glBindTexture(GL_TEXTURE_2D, 0); //Unbind font texture
 } //Draw text. Hopefully.
 
+void RenderCharacter(unsigned int TEXTSHADERPROGRAM, unsigned int PHchar, float x, float y, float scale, glm::vec3 color) {
+
+	glUseProgram(TEXTSHADERPROGRAM); //Set OpenGL to correct context
+	glUniform3f(glGetUniformLocation(TEXTSHADERPROGRAM, "textColor"), color.x, color.y, color.z);
+	glActiveTexture(GL_TEXTURE0); //Set active texture to first texture
+	glBindVertexArray(VAO);
+
+	glEnable(GL_BLEND); //Enable fragment blending (transparency)
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); //Select blend mode
+
+		Character ch = Alphabet.at(PHchar);
+
+		float xpos = x + ch.Bearing.x * scale;
+		float ypos = y - (ch.Size.y - ch.Bearing.y) * scale;
+
+		float w = ch.Size.x * scale;
+		float h = ch.Size.y * scale;
+
+
+		float vertices[6][4] = {
+			{ xpos,     ypos + h,   0.0f, 0.0f },
+			{ xpos,     ypos,       0.0f, 1.0f },
+			{ xpos + w, ypos,       1.0f, 1.0f },
+
+			{ xpos,     ypos + h,   0.0f, 0.0f },
+			{ xpos + w, ypos,       1.0f, 1.0f },
+			{ xpos + w, ypos + h,   1.0f, 0.0f }
+		}; //Set vertices to correct value for intended x, y
+
+		glBindTexture(GL_TEXTURE_2D, ch.ID);
+		glBindBuffer(GL_ARRAY_BUFFER, VBO);
+		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); //Send new data to VBO
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+		glDepthFunc(GL_ALWAYS); //Ignore depth test
+		glDrawArrays(GL_TRIANGLES, 0, 6); //Draw... triangles? They're quads guys, trust me
+		glDepthFunc(GL_LESS); //Re-enable depth test
+
+		x += (ch.Advance >> 6) * scale; //Move target x value forward by the forward of the character just drawn (have to get it out of 1/64th pixels and into full pixels)
+
+
+	glDisable(GL_BLEND);
+
+	glBindVertexArray(0); //Unbind VAO
+	glBindTexture(GL_TEXTURE_2D, 0); //Unbind font texture
+} //Draw text. Hopefully.
+
 
 
   ////  //  ////////////////////////////  //  ////
@@ -729,9 +842,7 @@ int main() {
 	{
 		ERROR << Header << "Failed to load texture" << "\n";
 	}
-	
-	//const char *FileName = "exportedtexture.jpg";
-	//stbi_write_jpg(FileName,96,32,3,data,90);
+
 	
 	stbi_image_free(data); //Return the memory of the raw texture data from file
 
@@ -754,8 +865,6 @@ int main() {
 		return -1;
 	}
 
-
-	FT_Face face; //Create font face from file
 	if (FT_New_Face(ft, myPath11.c_str(), 0, &face)) {
 		ERROR << Header << "Terminating! FreeType library failed to load font file with following message:\n " << getFreeTypeErrorMessage(FT_New_Face(ft, myPath11.c_str(), 0, &face)) << "\n" << myPath11.c_str() << "\n";
 		return -1;
@@ -765,7 +874,7 @@ int main() {
 	
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1); //Reduce pixel size in memory down to 1 byte, since we only need one 8-bit number for each glyph bitmap pixel
 
-	for (unsigned char c = 0; c < 128; c++) {
+	for (unsigned int c = 0; c < 128; c++) {
 		if (FT_Load_Char(face, c, FT_LOAD_RENDER)) //Load character - FT_LOAD_RENDER results in an 8-bit grayscale bitmap being generated for the character
 		{
 			ERROR << Header << "Terminating! FreeType library failed to load glyph with following message:\n " << getFreeTypeErrorMessage(FT_Load_Char(face, c, FT_LOAD_RENDER)) << "\n";
@@ -786,12 +895,14 @@ int main() {
 
 		//Store character into vector for later use
 		Character character = { texture,glm::ivec2(face->glyph->bitmap.width,face->glyph->bitmap.rows),glm::ivec2(face->glyph->bitmap_left,face->glyph->bitmap_top),static_cast<unsigned int>(face->glyph->advance.x) };
-		Alphabet.insert(std::pair<char, Character>(c, character)); //Insert created character and corresponding ASCII number into the map
-	}
+		Alphabet.insert(std::pair<unsigned int, Character>(c, character)); //Insert created character and corresponding ASCII number into the map
+	} 
+
+
 	glBindTexture(GL_TEXTURE_2D, 0);
 
-	FT_Done_Face(face); //Stop using font face and return resources
-	FT_Done_FreeType(ft); //Stop using FreeType library and return resources
+	//FT_Done_Face(face); //Stop using font face and return resources... probably can't do this if I want to dynamically stream in and out lots of unicode characters on the fly (multiplayer text chat)
+	//FT_Done_FreeType(ft); //Stop using FreeType library and return resources
 
 
       ////////////////////
@@ -824,10 +935,6 @@ int main() {
 		dt = glfwGetTime()-t;
 		FPS = 1.0f / dt; //Find FPS
 		t = glfwGetTime();
-
-		//HANDLE INPUT
-
-		Get_Input(GameWindow);
 
 		//RENDER 3-D
 
@@ -887,6 +994,9 @@ int main() {
 		}
 	#endif
 
+		//HANDLE INPUT
+
+		Get_Input(GameWindow);
 
 		glfwSwapBuffers(GameWindow); //Display new frame
 		glfwPollEvents(); //Check for new events
