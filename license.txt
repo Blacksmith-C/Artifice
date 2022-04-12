@@ -1,11 +1,25 @@
-ARTIFICE COPYLEFT LICENSE (ACL) v1
+ARTIFICE COPYLEFT LICENSE (ACL) v2
 
-All interested parties are hereby granted at no cost a perpetual license to all versions past, present, or future of the Artifice software. 
-License holders are entitled to view the source code of the Artifice software, make copies of it, and to modify those copies. Artifice is 
-a Free and Open Source Software (FOSS). Any work derivative of the Artifice software must also be FOSS- any product derived in whole or in 
-part from the Artifice software must be publicly available on the Internet, in its entirety, in an unobfuscated format, and may never be 
-bought or sold. Any work derivative of the Artifice software which is not provided as FOSS is in violation of this license. 
+All interested parties are hereby granted at no cost a perpetual license to all versions, past and present, of the Artifice software.
+By utilizing this software, you agree to the conditions detailed in this license. License holders are entitled to view the source 
+code of the Artifice software, make copies of it, and to modify those copies. Artifice is a Free and Open Source Software (FOSS). Any 
+work derivative of the Artifice software must also be FOSS- any product derived in whole or in part from the Artifice software must 
+be publicly available by request, unaltered, in its entirety, in an unobfuscated format, and may never be bought or sold. Any work 
+derivative of the Artifice software which is not provided as FOSS is in violation of this license. 
+
+The Artifice software makes use of other FOSS, to include the 2017 C++ Standard Library, the stb library, FreeType, GLFW, GLAD, and OpenGL. 
+These softwares are distributed with Artifice as allowable by their respective licenses, and all belong to their respective owners. 
 
 The Artifice software is intended to be able to read external software 'modules' in order to allow for user customization and 
-experimentation. Wholly original modules produced for the Artifice software or its derivatives may be sold at any price deemed appropriate
-by its authors. Modules not provided for free which include the Artifice software in whole or in part are in violation of this license.
+experimentation. The Artifice software does not include any images, fonts, models, videos, audio, scripts, or other assets intended to be 
+read by the Artifice software as modules. Wholly original modules produced for the Artifice software or its derivatives may be sold at any 
+price deemed appropriate by its authors. Modules not provided for free which include the Artifice software in whole or in part are in 
+violation of this license.
+
+The Artifice software may be distributed by license holders by itself, or along with other modules and software that they have the right
+to distribute. Any version of the Artifice software or derivative works which is included with the distribution of paid or proprietary 
+software (not FOSS) must also be available as FOSS. To distribute the Artifice software or its derivatives with paid or proprietary
+software while not simultaneously providing the same version of the Artifice software or its derivatives as FOSS is to be in violation of
+this license. 
+
+This is an updated version of the ACL. All previous versions are hereby nullified, and are replaced with this version.
